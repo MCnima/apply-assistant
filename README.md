@@ -2,7 +2,7 @@
 
 Apply Assistant is a local-first desktop workspace for organizing PhD research leads and privately tracking applications. The main research hierarchy is **university → researcher → research programs and publications**. Application milestones, tasks, outcomes, and outcome notes are stored locally on the user's device.
 
-**Current version:** 3.1.0  
+**Current version:** 3.2.0
 **License:** MIT
 
 ## Features
@@ -15,6 +15,8 @@ Apply Assistant is a local-first desktop workspace for organizing PhD research l
 - Track applications by university with status, deadline, next task/date, outcome, and private outcome notes. Application records stay in the local database, are excluded from AI research prompts, and are not included in the public source repository.
 - Generate two research prompts: Stage 1 discovers researcher names and public source URLs; Stage 2 enriches only selected names into structured, source-backed university, researcher, program, and publication data.
 - Preview imports before applying them. Importing is additive: new stable IDs add records, matching IDs update only included fields, and omitted records/fields are retained. The whole import is validated and committed transactionally.
+- Import JSON by selecting a file or pasting the response directly into the app; pasted JSON must pass validation and preview before it can be applied.
+- Open valid HTTP(S) source, website, program, publication, and public-profile links in the system browser. Bare hostnames are treated as HTTPS; unsafe schemes are not made clickable.
 - Export a JSON copy or create a SQLite backup.
 
 AI output is not independently verified by the app. Check cited sources yourself, especially deadlines, eligibility, funding, social links, and personal details. The app does not contact an AI service, scrape websites, send email, or guarantee admission/funding.
@@ -38,8 +40,8 @@ The database is at `%LOCALAPPDATA%\ApplyAssistant\apply_assistant.sqlite3`. Open
 
 1. Select **Daily AI prompt** and choose Stage 1. Fill in the scope, copy the prompt into an AI tool, and review its researcher names and source links.
 2. Select the researchers you want, switch to Stage 2, and paste those names/source notes into the names field. Copy the enrichment prompt.
-3. Check every source and correct/remove unsupported facts. Save the AI's JSON as a `.json` file.
-4. Choose **Import JSON**, inspect the preview counts, and confirm only if the changes are right. The AI prompt always excludes private application/outcome records.
+3. Check every source and correct/remove unsupported facts. Copy the AI's JSON response.
+4. Choose **Paste JSON**, validate it, inspect the preview counts, and apply only if the changes are right. Alternatively, save JSON to a file and choose **Import JSON**. The AI prompt always excludes private application/outcome records.
 5. Export or back up regularly.
 
 Stage 2 uses schema version `2.0`; older `1.0` imports remain supported. Stable IDs are required. Reuse an ID only for the same record; same-name records with different IDs remain separate. Researchers need a `university_id`; publications need a `researcher_id`; programs may be unassigned. Applications require a `university_id`, and may optionally link a researcher and program. Omitted fields on matching records are not overwritten. Personal application data is local-only, but a user-selected JSON export contains all database records; protect that export accordingly.

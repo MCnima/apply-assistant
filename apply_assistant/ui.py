@@ -497,6 +497,115 @@ class ApplicationDialog(QDialog):
         }
 
 
+class PasteImportDialog(QDialog):
+    def __init__(self, database: Database, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.database = database
+        self._preview_text: str | None = None
+        self._preview_counts: dict[str, dict[str, int]] | None = None
+        self.import_result: dict[str, dict[str, int]] | None = None
+        self.setWindowTitle("Paste JSON import")
+        self.resize(820, 720)
+
+        intro = QLabel(
+            "Paste a schema 2.0 AI response or a compatible 1.0 export. Validate and review "
+            "the counts before applying. Existing records are only updated when stable IDs match."
+        )
+        intro.setWordWrap(True)
+        intro.setObjectName("muted")
+        self.editor = QPlainTextEdit()
+        self.editor.setPlaceholderText(
+            '{\n  "schema_version": "2.0",\n  "universities": [],\n'
+            '  "researchers": [],\n  "opportunities": [],\n'
+            '  "publications": [],\n  "applications": []\n}'
+        )
+        self.summary = QLabel("Paste JSON, then select “Validate & preview”.")
+        self.summary.setWordWrap(True)
+        self.summary.setTextFormat(Qt.TextFormat.PlainText)
+
+        self.preview_button = QPushButton("Validate & preview")
+        self.preview_button.clicked.connect(self.preview_import)
+        self.apply_button = QPushButton("Apply import")
+        self.apply_button.setObjectName("primary")
+        self.apply_button.setEnabled(False)
+        self.apply_button.clicked.connect(self.apply_import)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+
+        actions = QHBoxLayout()
+        actions.addWidget(self.preview_button)
+        actions.addStretch(1)
+        actions.addWidget(cancel_button)
+        actions.addWidget(self.apply_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.editor, 1)
+        layout.addWidget(self.summary)
+        layout.addLayout(actions)
+        self.editor.textChanged.connect(self.invalidate_preview)
+
+    def invalidate_preview(self) -> None:
+        self._preview_text = None
+        self._preview_counts = None
+        self.apply_button.setEnabled(False)
+        self.summary.setText("JSON changed. Validate and review the updated import before applying.")
+
+    def preview_import(self) -> None:
+        try:
+            preview = self.database.preview_import(self.editor.toPlainText())
+        except (ImportValidationError, sqlite3.Error) as exc:
+            self._preview_text = None
+            self._preview_counts = None
+            self.apply_button.setEnabled(False)
+            self.summary.setText(f"Import validation failed: {exc}")
+            return
+        self._preview_text = self.editor.toPlainText()
+        self._preview_counts = preview["counts"]
+        lines = [
+            f"{table.title()}: {counts['added']} new, {counts['updated']} matching-ID updates"
+            for table, counts in preview["counts"].items()
+            if counts["added"] or counts["updated"]
+        ]
+        if not lines:
+            lines.append("No additions or updates.")
+        self.summary.setText(
+            "Preview ready — omitted records will remain unchanged.\n" + "\n".join(lines)
+        )
+        self.apply_button.setEnabled(True)
+
+    def apply_import(self) -> None:
+        text = self.editor.toPlainText()
+        if self._preview_text != text:
+            self.invalidate_preview()
+            return
+        try:
+            current_preview = self.database.preview_import(text)
+            if current_preview["counts"] != self._preview_counts:
+                self._preview_counts = current_preview["counts"]
+                self._preview_text = text
+                self.preview_import()
+                self.summary.setText(
+                    "The database changed since your preview. Review the refreshed counts "
+                    "before applying.\n" + self.summary.text()
+                )
+                return
+            result = self.database.import_json(text)
+        except (ImportValidationError, sqlite3.Error) as exc:
+            self._preview_text = None
+            self._preview_counts = None
+            self.apply_button.setEnabled(False)
+            self.summary.setText(f"Import was not applied: {exc}")
+            return
+        lines = [
+            f"{table.title()}: {counts['added']} added, {counts['updated']} updated"
+            for table, counts in result.items()
+            if counts["added"] or counts["updated"]
+        ]
+        self.import_result = result
+        self.summary.setText("Import complete.\n" + ("\n".join(lines) or "No changes were needed."))
+        self.accept()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, database: Database):
         super().__init__()
@@ -534,6 +643,7 @@ class MainWindow(QMainWindow):
         for title, callback, primary in (
             ("Track application", self.add_application, False),
             ("Daily AI prompt", self.open_prompt, False),
+            ("Paste JSON", self.paste_import_data, False),
             ("Import JSON", self.import_data, True),
             ("Export", self.export_data, False),
         ):
@@ -1103,11 +1213,12 @@ class MainWindow(QMainWindow):
         value_label = QLabel()
         value_label.setWordWrap(True)
         if link:
-            parsed = QUrl(value)
-            if parsed.scheme().lower() in {"http", "https"} and parsed.host():
-                safe_value = html.escape(value, quote=True)
+            external_url = self.normalized_web_url(value)
+            if external_url:
+                safe_value = html.escape(external_url, quote=True)
+                safe_text = html.escape(value, quote=True)
                 value_label.setText(
-                    f'<a href="{safe_value}" style="color: {COLORS["green"]}">{safe_value}</a>'
+                    f'<a href="{safe_value}" style="color: {COLORS["green"]}">{safe_text}</a>'
                 )
                 value_label.setOpenExternalLinks(True)
             else:
@@ -1119,6 +1230,22 @@ class MainWindow(QMainWindow):
         row.addWidget(key, 0, Qt.AlignmentFlag.AlignTop)
         row.addWidget(value_label, 1)
         layout.addLayout(row)
+
+    @staticmethod
+    def normalized_web_url(value: str) -> str | None:
+        candidate = value.strip()
+        if not candidate:
+            return None
+        parsed = QUrl(candidate)
+        if not parsed.scheme():
+            parsed = QUrl("https://" + candidate)
+        if (
+            parsed.scheme().lower() not in {"http", "https"}
+            or not parsed.host()
+            or parsed.userInfo()
+        ):
+            return None
+        return parsed.toString()
 
     def select_record(self, table: str, record_id: str) -> None:
         if (table, record_id) not in self._tree_items:
@@ -1449,6 +1576,21 @@ class MainWindow(QMainWindow):
             self.refresh()
         except ImportValidationError as exc:
             self.show_error("Import was not applied", exc)
+
+    def paste_import_data(self) -> None:
+        dialog = PasteImportDialog(self.database, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.refresh()
+            result = dialog.import_result or {}
+            lines = [
+                f"{table.title()}: {counts['added']} added, {counts['updated']} updated"
+                for table, counts in result.items()
+                if counts["added"] or counts["updated"]
+            ]
+            QMessageBox.information(
+                self, "Import complete",
+                "\n".join(lines) or "No changes were needed.",
+            )
 
     def export_data(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
