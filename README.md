@@ -2,7 +2,7 @@
 
 Apply Assistant is a local-first desktop workspace for organizing PhD research leads and privately tracking applications. The main research hierarchy is **university → researcher → research programs and publications**. Application milestones, tasks, outcomes, and outcome notes are stored locally on the user's device.
 
-**Current version:** 3.3.0
+**Current version:** 3.3.1
 **License:** MIT
 
 ## Features
@@ -80,4 +80,4 @@ pip install -r requirements-build.txt
 python build_windows.py
 ```
 
-The executable is written to `dist\v<version>\ApplyAssistant.exe` (for example, `dist\v3.3.0\ApplyAssistant.exe`). The script refuses to overwrite a non-empty version folder. Build again with a new version number to create a separate folder. User data is saved outside the application bundle in local app data. Test each packaged executable on a clean Windows machine before distributing it.
+The executable is written to `dist\v<version>\ApplyAssistant.exe` (for example, `dist\v3.3.1\ApplyAssistant.exe`). The script refuses to overwrite a non-empty version folder. Build again with a new version number to create a separate folder. User data is saved outside the application bundle in local app data. Test each packaged executable on a clean Windows machine before distributing it.

@@ -301,7 +301,8 @@ class PromptDialog(QDialog):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("Daily research prompt")
-        self.resize(790, 760)
+        self.resize(680, 600)
+        self.setMinimumSize(560, 480)
         self.discipline = QLineEdit()
         self.topic = QLineEdit()
         self.geography = QLineEdit()
@@ -314,7 +315,8 @@ class PromptDialog(QDialog):
         self.selected_names = QPlainTextEdit()
         self.selected_names.setPlaceholderText("Paste the names and source notes you selected from Stage 1")
         self.selected_names.setMaximumHeight(100)
-        form = QFormLayout()
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
         form.addRow("Prompt stage", self.stage)
         for label, field in (
             ("Discipline", self.discipline),
@@ -330,7 +332,7 @@ class PromptDialog(QDialog):
         self.names_row.setVisible(False)
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
-        self.output.setMinimumHeight(365)
+        self.output.setMinimumHeight(185)
         self.refresh()
         copy_button = QPushButton("Copy prompt")
         copy_button.setObjectName("primary")
@@ -350,7 +352,11 @@ class PromptDialog(QDialog):
         intro.setWordWrap(True)
         intro.setObjectName("muted")
         layout.addWidget(intro)
-        layout.addLayout(form)
+        form_scroll = QScrollArea()
+        form_scroll.setWidgetResizable(True)
+        form_scroll.setMaximumHeight(240)
+        form_scroll.setWidget(form_widget)
+        layout.addWidget(form_scroll)
         layout.addWidget(self.output, 1)
         layout.addLayout(buttons)
         for field in (self.discipline, self.topic, self.geography, self.university_scope,

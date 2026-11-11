@@ -10,7 +10,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from apply_assistant.data import Database
 from apply_assistant.ui import (
@@ -18,6 +25,7 @@ from apply_assistant.ui import (
     ExternalLinkLabel,
     MainWindow,
     PasteImportDialog,
+    PromptDialog,
     ResearcherPromptDialog,
 )
 
@@ -239,6 +247,26 @@ class ResearcherProfilePromptTests(unittest.TestCase):
                 window.close()
             finally:
                 database.close()
+
+
+class DailyPromptDialogSizeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_stage_two_prompt_uses_compact_scrollable_layout(self):
+        dialog = PromptDialog()
+        dialog.stage.setCurrentIndex(1)
+        self.assertEqual(dialog.stage.currentData(), "enrichment")
+        self.assertFalse(dialog.names_row.isHidden())
+        self.assertLessEqual(dialog.width(), 700)
+        self.assertLessEqual(dialog.height(), 620)
+        self.assertGreaterEqual(dialog.minimumHeight(), 460)
+        self.assertEqual(dialog.output.minimumHeight(), 185)
+        scroll_areas = dialog.findChildren(QScrollArea)
+        self.assertEqual(len(scroll_areas), 1)
+        self.assertEqual(scroll_areas[0].maximumHeight(), 240)
+        dialog.close()
 
 
 if __name__ == "__main__":
