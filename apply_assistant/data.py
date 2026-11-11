@@ -834,3 +834,52 @@ All provided values must be strings. For unknown optional values use "". For `in
 Example shape:
 {{"schema_version":"{SCHEMA_VERSION}","generated_at":"YYYY-MM-DD","universities":[],"researchers":[],"opportunities":[],"publications":[],"applications":[]}}
 """
+
+
+def build_researcher_profile_prompt(researcher: dict[str, Any]) -> str:
+    identity = {
+        field: researcher.get(field, "")
+        for field in (
+            "id", "university_id", "full_name", "title", "profile_url",
+            "research_interests", "source_url", "verified_on",
+        )
+    }
+    known_identity = json.dumps(identity, ensure_ascii=False, indent=2)
+    return f"""Research the professional academic work of this one specific researcher.
+
+Confirmed record identity (preserve the exact id, university_id, and full_name):
+{known_identity}
+
+Use reliable public sources, prioritizing the researcher's official university, lab,
+and publication pages. Describe their specific research themes, methods, active projects,
+and recent relevant publications. Include current PhD/research opportunities only when
+an official source confirms they are open. Cite direct source URLs and the date checked.
+Never infer identity, affiliation, facts, funding, availability, or contact details.
+Do not include age, favorite things, private application information, outreach suggestions,
+or personal/social details.
+
+Return ONLY valid JSON, with schema_version "{SCHEMA_VERSION}", today's generated_at date,
+and exactly these top-level keys: schema_version, generated_at, universities,
+researchers, opportunities, publications, applications. Return empty universities and
+applications arrays. Return at most one researchers record, only when you can verify
+professional facts about this exact person. Its id, university_id, and full_name must
+match the identity block exactly. Put a detailed, source-linked professional research
+profile in research_interests, including themes, methods, labs, and current work. Omit
+notes so the existing user's notes remain unchanged. Do not include optional researcher
+fields you cannot verify. Use
+source-confirmed status only when the researcher facts have a direct source_url and
+verified_on date.
+
+Programs belong in opportunities and must use this exact researcher_id. Publications
+belong in publications and must use this exact researcher_id. Include only source-backed
+records for this researcher. Give each child record a stable ID that remains identical
+on future runs: use "opportunity:<researcher id>:<normalized title>" for opportunities
+and "publication:<researcher id>:<DOI or normalized title and year>" for publications.
+Use canonical URLs when available. Do not create applications or outcomes.
+
+For every field, use strings; use "" for unknown optional values. Required fields:
+researcher id, university_id, full_name; opportunity id and title; publication id,
+researcher_id, and title. Source-confirmed records need source_url and verified_on.
+Use information_status "source-confirmed" or "unknown" only. Do not return Markdown,
+comments, extra fields, or records for any other person.
+"""

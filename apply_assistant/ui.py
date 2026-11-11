@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -42,19 +42,29 @@ from .data import (
     ImportValidationError,
     build_discovery_prompt,
     build_enrichment_prompt,
+    build_researcher_profile_prompt,
 )
 
 
 COLORS = {
-    "ink": "#17352f",
-    "muted": "#667b74",
-    "green": "#20765b",
-    "green_dark": "#185d49",
-    "pale": "#eef6f1",
-    "line": "#e1e9e4",
-    "canvas": "#f6f8f6",
+    "ink": "#111827",
+    "muted": "#374151",
+    "green": "#1d4ed8",
+    "green_dark": "#1e40af",
+    "pale": "#dbeafe",
+    "line": "#9ca3af",
+    "canvas": "#f3f4f6",
     "white": "#ffffff",
-    "amber": "#fff3d8",
+    "amber": "#fef3c7",
+    "success_bg": "#dcfce7",
+    "success_text": "#14532d",
+    "neutral_bg": "#e5e7eb",
+    "neutral_text": "#374151",
+    "danger": "#b91c1c",
+    "danger_bg": "#fee2e2",
+    "danger_line": "#fca5a5",
+    "profile_bg": "#7c2d12",
+    "profile_hover": "#9a3412",
 }
 
 APP_STYLE = f"""
@@ -71,14 +81,18 @@ QTreeWidget {{ background: transparent; border: 0; outline: 0; padding: 6px; }}
 QTreeWidget::item {{ min-height: 34px; padding: 4px 5px; border-radius: 6px; }}
 QTreeWidget::item:selected {{ background: {COLORS['pale']}; color: {COLORS['green_dark']}; }}
 QLineEdit, QComboBox, QPlainTextEdit {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 8px 10px; selection-background-color: {COLORS['green']}; }}
-QComboBox QAbstractItemView {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; selection-background-color: {COLORS['pale']}; selection-color: {COLORS['green_dark']}; outline: 0; }}
+QComboBox QAbstractItemView {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; selection-background-color: {COLORS['pale']}; selection-color: {COLORS['ink']}; outline: 0; }}
 QAbstractItemView::item {{ min-height: 28px; padding: 5px 8px; }}
 QPlainTextEdit {{ line-height: 1.4; }}
-QPushButton {{ background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 9px 13px; font-weight: 600; }}
-QPushButton:hover {{ background: {COLORS['pale']}; border-color: #b7d5c6; }}
+QPushButton {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 9px 13px; font-weight: 600; }}
+QPushButton:hover {{ background: {COLORS['pale']}; border-color: {COLORS['green']}; }}
 QPushButton#primary {{ background: {COLORS['green']}; color: white; border: 0; }}
 QPushButton#primary:hover {{ background: {COLORS['green_dark']}; }}
 QPushButton#quiet {{ border: 0; background: transparent; color: {COLORS['green']}; }}
+QPushButton#profilePerson {{ background: {COLORS['profile_bg']}; color: white; border: 0; }}
+QPushButton#profilePerson:hover {{ background: {COLORS['profile_hover']}; }}
+QPushButton#danger {{ color: {COLORS['danger']}; border-color: {COLORS['danger_line']}; }}
+QPushButton#danger:hover {{ background: {COLORS['danger_bg']}; }}
 QScrollArea {{ background: {COLORS['canvas']}; border: 0; }}
 QWidget#applicationFormBody {{ background: {COLORS['canvas']}; }}
 """
@@ -114,6 +128,34 @@ class LogoMark(QWidget):
         painter.drawEllipse(21, 11, 7, 6)
         painter.drawEllipse(15, 6, 7, 7)
         painter.end()
+
+
+class ExternalLinkLabel(QLabel):
+    def __init__(self, text: str, url: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.url = QUrl(url)
+        self.setTextFormat(Qt.TextFormat.RichText)
+        self.setText(
+            f'<span style="color: {COLORS["green"]}; text-decoration: underline">'
+            f'{html.escape(text, quote=True)}</span>'
+        )
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Ctrl+click to open in your default browser.")
+
+    def mouseReleaseEvent(self, event: Any) -> None:
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and self.rect().contains(event.position().toPoint())
+        ):
+            if not QDesktopServices.openUrl(self.url):
+                QMessageBox.warning(
+                    self, "Could not open link",
+                    "Your system could not open this link in a browser.",
+                )
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 class AddUniversityDialog(QDialog):
@@ -335,6 +377,38 @@ class PromptDialog(QDialog):
     def copy_prompt(self) -> None:
         QApplication.clipboard().setText(self.output.toPlainText())
         QMessageBox.information(self, "Prompt copied", "The prompt is ready to paste into your AI chat.")
+
+
+class ResearcherPromptDialog(QDialog):
+    def __init__(self, researcher: dict[str, Any], parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Profile this person · {researcher['full_name']}")
+        self.resize(790, 700)
+        intro = QLabel(
+            "Copy this prompt into your AI tool. It researches this person only and returns "
+            "stable-ID JSON; use Paste JSON to preview and add the sourced profile details."
+        )
+        intro.setWordWrap(True)
+        self.output = QPlainTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setPlainText(build_researcher_profile_prompt(researcher))
+        copy_button = QPushButton("Copy prompt")
+        copy_button.setObjectName("primary")
+        copy_button.clicked.connect(self.copy_prompt)
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(close_button)
+        buttons.addWidget(copy_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.output, 1)
+        layout.addLayout(buttons)
+
+    def copy_prompt(self) -> None:
+        QApplication.clipboard().setText(self.output.toPlainText())
+        QMessageBox.information(self, "Prompt copied", "Paste it into your AI tool, then use Paste JSON.")
 
 
 class RelatedRecordDialog(QDialog):
@@ -952,7 +1026,7 @@ class MainWindow(QMainWindow):
             for researcher in researchers:
                 button = QPushButton(f"{researcher['full_name']}   ›")
                 button.setStyleSheet(
-                    "text-align: left; padding: 12px; background: #f7faf8; border: 0;"
+                    f"text-align: left; padding: 12px; background: {COLORS['white']}; border: 0;"
                 )
                 button.clicked.connect(
                     lambda checked=False, rid=researcher["id"]: self.select_record("researchers", rid)
@@ -1014,6 +1088,12 @@ class MainWindow(QMainWindow):
         edit = QPushButton("Edit researcher profile")
         edit.clicked.connect(lambda checked=False, row=researcher: self.edit_researcher(row))
         self.detail_layout.addWidget(edit, alignment=Qt.AlignmentFlag.AlignLeft)
+        profile_person = QPushButton("Profile this person")
+        profile_person.setObjectName("profilePerson")
+        profile_person.clicked.connect(
+            lambda checked=False, row=researcher: self.profile_researcher(row)
+        )
+        self.detail_layout.addWidget(profile_person, alignment=Qt.AlignmentFlag.AlignLeft)
         opportunities = [
             row for row in self.database.rows("opportunities")
             if row.get("researcher_id") == researcher_id
@@ -1197,10 +1277,10 @@ class MainWindow(QMainWindow):
         status = record.get("information_status", "unknown")
         label = QLabel(STATUS_LABELS.get(status, status))
         label.setStyleSheet(
-            "background: #e8f4ec; color: #22624b; padding: 5px 9px; "
+            f"background: {COLORS['success_bg']}; color: {COLORS['success_text']}; padding: 5px 9px; "
             "border-radius: 8px; font-size: 9pt;"
             if status == "source-confirmed"
-            else "background: #f1f3f1; color: #596a62; padding: 5px 9px; "
+            else f"background: {COLORS['neutral_bg']}; color: {COLORS['neutral_text']}; padding: 5px 9px; "
                  "border-radius: 8px; font-size: 9pt;"
         )
         return label
@@ -1219,12 +1299,8 @@ class MainWindow(QMainWindow):
         if link:
             external_url = self.normalized_web_url(value)
             if external_url:
-                safe_value = html.escape(external_url, quote=True)
-                safe_text = html.escape(value, quote=True)
-                value_label.setText(
-                    f'<a href="{safe_value}" style="color: {COLORS["green"]}">{safe_text}</a>'
-                )
-                value_label.setOpenExternalLinks(True)
+                value_label = ExternalLinkLabel(value, external_url)
+                value_label.setWordWrap(True)
             else:
                 value_label.setTextFormat(Qt.TextFormat.PlainText)
                 value_label.setText(value)
@@ -1265,10 +1341,7 @@ class MainWindow(QMainWindow):
         layout: QVBoxLayout | None = None,
     ) -> None:
         button = QPushButton("Delete record…")
-        button.setStyleSheet(
-            "QPushButton {color:#963e37; border-color:#e9c4c0;}"
-            "QPushButton:hover {background:#fff0ee;}"
-        )
+        button.setObjectName("danger")
         button.clicked.connect(
             lambda checked=False, record_type=table, record_id=record["id"]:
             self.delete_record(record_type, record_id)
@@ -1624,6 +1697,9 @@ class MainWindow(QMainWindow):
 
     def open_prompt(self) -> None:
         PromptDialog(self).exec()
+
+    def profile_researcher(self, researcher: dict[str, Any]) -> None:
+        ResearcherPromptDialog(researcher, self).exec()
 
     def show_error(self, title: str, error: Exception) -> None:
         QMessageBox.critical(self, title, str(error))

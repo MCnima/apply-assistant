@@ -9,6 +9,7 @@ from apply_assistant.data import (
     ImportValidationError,
     build_discovery_prompt,
     build_enrichment_prompt,
+    build_researcher_profile_prompt,
 )
 
 
@@ -364,6 +365,23 @@ class DailyPromptTests(unittest.TestCase):
         self.assertIn("personally self-disclosed", prompt)
         self.assertIn('"applications":[]', prompt)
         self.assertIn("never published", prompt)
+
+    def test_person_profile_prompt_targets_only_the_existing_researcher(self):
+        prompt = build_researcher_profile_prompt({
+            "id": "researcher:lee@university:north",
+            "university_id": "university:north",
+            "full_name": "Dr. Lee",
+            "profile_url": "https://north.example.edu/lee",
+            "research_interests": "Cell signaling",
+            "notes": "Private note that must not be copied into an AI prompt.",
+        })
+        self.assertIn('"id": "researcher:lee@university:north"', prompt)
+        self.assertIn('"university_id": "university:north"', prompt)
+        self.assertIn("Return at most one researchers record", prompt)
+        self.assertIn("stable ID", prompt)
+        self.assertIn("applications", prompt)
+        self.assertIn("Do not include age, favorite things", prompt)
+        self.assertNotIn("Private note", prompt)
 
 
 if __name__ == "__main__":
