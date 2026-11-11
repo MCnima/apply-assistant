@@ -70,14 +70,17 @@ QFrame#metric {{ padding: 8px; }}
 QTreeWidget {{ background: transparent; border: 0; outline: 0; padding: 6px; }}
 QTreeWidget::item {{ min-height: 34px; padding: 4px 5px; border-radius: 6px; }}
 QTreeWidget::item:selected {{ background: {COLORS['pale']}; color: {COLORS['green_dark']}; }}
-QLineEdit, QComboBox, QPlainTextEdit {{ background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 8px 10px; selection-background-color: {COLORS['green']}; }}
+QLineEdit, QComboBox, QPlainTextEdit {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 8px 10px; selection-background-color: {COLORS['green']}; }}
+QComboBox QAbstractItemView {{ color: {COLORS['ink']}; background: {COLORS['white']}; border: 1px solid {COLORS['line']}; selection-background-color: {COLORS['pale']}; selection-color: {COLORS['green_dark']}; outline: 0; }}
+QAbstractItemView::item {{ min-height: 28px; padding: 5px 8px; }}
 QPlainTextEdit {{ line-height: 1.4; }}
 QPushButton {{ background: {COLORS['white']}; border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 9px 13px; font-weight: 600; }}
 QPushButton:hover {{ background: {COLORS['pale']}; border-color: #b7d5c6; }}
 QPushButton#primary {{ background: {COLORS['green']}; color: white; border: 0; }}
 QPushButton#primary:hover {{ background: {COLORS['green_dark']}; }}
 QPushButton#quiet {{ border: 0; background: transparent; color: {COLORS['green']}; }}
-QScrollArea {{ background: transparent; border: 0; }}
+QScrollArea {{ background: {COLORS['canvas']}; border: 0; }}
+QWidget#applicationFormBody {{ background: {COLORS['canvas']}; }}
 """
 
 STATUS_LABELS = {
@@ -470,6 +473,7 @@ class ApplicationDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         form_body = QWidget()
+        form_body.setObjectName("applicationFormBody")
         form_layout = QVBoxLayout(form_body)
         form_layout.addLayout(form)
         scroll.setWidget(form_body)

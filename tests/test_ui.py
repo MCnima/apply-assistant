@@ -6,10 +6,11 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 from apply_assistant.data import Database
-from apply_assistant.ui import MainWindow, PasteImportDialog
+from apply_assistant.ui import ApplicationDialog, MainWindow, PasteImportDialog
 
 
 class PasteImportDialogTests(unittest.TestCase):
@@ -79,6 +80,50 @@ class ExternalLinkTests(unittest.TestCase):
                 self.assertIsInstance(link_label, QLabel)
                 self.assertTrue(link_label.openExternalLinks())
                 self.assertIn('href="https://www.example.edu/lab"', link_label.text())
+                window.close()
+            finally:
+                database.close()
+
+
+class DialogContrastTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_application_form_and_dropdown_use_light_high_contrast_colors(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database = Database(Path(temp_dir) / "contrast.sqlite3")
+            try:
+                window = MainWindow(database)
+                dialog = ApplicationDialog(database, parent=window)
+                form_body = dialog.findChild(QWidget, "applicationFormBody")
+                self.assertIsNotNone(form_body)
+                university_label = next(
+                    label for label in dialog.findChildren(QLabel)
+                    if label.text() == "University *"
+                )
+                form_body.ensurePolished()
+                university_label.ensurePolished()
+                popup = dialog.university.view()
+                popup.ensurePolished()
+                self.assertEqual(
+                    form_body.palette().color(QPalette.ColorRole.Window).name(),
+                    "#f6f8f6",
+                )
+                self.assertEqual(
+                    university_label.palette().color(QPalette.ColorRole.WindowText).name(),
+                    "#17352f",
+                )
+                self.assertEqual(
+                    popup.palette().color(QPalette.ColorRole.Base).name(),
+                    "#ffffff",
+                )
+                self.assertEqual(
+                    popup.palette().color(QPalette.ColorRole.Text).name(),
+                    "#17352f",
+                )
+                self.assertIn("QComboBox QAbstractItemView", window.styleSheet())
+                dialog.close()
                 window.close()
             finally:
                 database.close()
